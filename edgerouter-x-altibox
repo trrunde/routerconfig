@@ -1,0 +1,51 @@
+Følgende ting trengs for å få tv og internet fra Altibox på en edgerouter-x
+
+1. Kopier mac adresse fra hjemmesentral og bruk denne på erx
+
+set interfaces ethernet eth0 mac 'ff:ff:ff:ff:ff:ff'
+
+2. Definer vlan på uplink, lat som en er en VMG slik at opsjon med statiske router blir sendt. (edgerouter endrer ikke routetabellen basert på inneholdet, så det må gjøres statisk)
+
+set interfaces ethernet eth0 vif 101 address dhcp
+set interfaces ethernet eth0 vif 101 description IPTV
+set interfaces ethernet eth0 vif 101 dhcp-options client-option 'send vendor-class-identifier &quot;VMG8825-B50B&quot;;'
+set interfaces ethernet eth0 vif 101 dhcp-options client-option 'request subnet-mask, routers, rfc3442-classless-static-routes;'
+set interfaces ethernet eth0 vif 101 dhcp-options default-route no-update
+set interfaces ethernet eth0 vif 101 dhcp-options default-route-distance 210
+set interfaces ethernet eth0 vif 101 dhcp-options name-server no-update
+set interfaces ethernet eth0 vif 101 firewall in name TV-IN
+
+set interfaces ethernet eth0 vif 102 address dhcp
+set interfaces ethernet eth0 vif 102 description Internet
+set interfaces ethernet eth0 vif 102 firewall in name WAN_IN
+set interfaces ethernet eth0 vif 102 firewall local name WAN_LOCAL
+
+
+3. Aktiv igmp proxy
+
+set protocols igmp-proxy interface eth0.101 alt-subnet 0.0.0.0/0
+set protocols igmp-proxy interface eth0.101 role upstream
+set protocols igmp-proxy interface eth0.101 threshold 1
+set protocols igmp-proxy interface switch0 role downstream
+set protocols igmp-proxy interface switch0 threshold 1
+
+4. Legg inn statiske router via vlan 101:
+
+set protocols static route x.x.x.x/x next-hop 10.x.x.x
+
+
+5. Aktiver nating av trafikk mot vlan 101 og 102
+
+set service nat rule 5010 description 'Internet - Vlan102'
+set service nat rule 5010 log disable
+set service nat rule 5010 outbound-interface eth0.102
+set service nat rule 5010 protocol all
+set service nat rule 5010 type masquerade
+
+set service nat rule 5011 description 'TV - Vlan 101'
+set service nat rule 5011 log disable
+set service nat rule 5011 outbound-interface eth0.101
+set service nat rule 5011 protocol all
+set service nat rule 5011 type masquerade
+
+

@@ -1,1 +1,105 @@
-her kommer config for å erstatte vmg med mikrotik
+medfølgende sfp fra vmg fungerer fint i RB4011
+testet med følgende versjon:
+# by RouterOS 6.45.3
+# software id = 83CT-MQM9
+#
+# model = RB4011iGS+
+
+1. Enable multicast pakke
+
+http://192.168.88.1/webfig/#System:Packages
+
+Logg på med ssh for resterende
+
+2.
+Kopier vmg sin mac adresse, en får ikke ip-adresse på vlan 101 uten korrekt mac. Legg mac adresse på sfp interface
+
+/interface ethernet
+set [ find default-name=sfp-sfpplus1 ] mac-address=54:83:XX:XX:XX:XX
+
+3. 
+Sett opp vlan 100-102 på wan
+
+/interface vlan
+add interface=sfp-sfpplus1 name=vlan-isp vlan-id=102
+add interface=sfp-sfpplus1 name=vlan-tv vlan-id=101
+add interface=sfp-sfpplus1 name=vlan-voip vlan-id=100
+
+4. 
+Sett dhcp option 60 slik at dhcp server tror du er en VMG og dermed gir deg routing for tv subnetta via dhcp
+/ip dhcp-client option
+add code=60 name=vendor-class-identifier value=0x564d47383832352d42353042
+
+5. 
+Sett opp dhcp option 43 for lokal dhcp server slik at q22 vet om server
+/ip dhcp-server option
+add code=43 name=q22 value="'41:6c:74:69:62:6f:78:2d:54:4d:53:2d:53:65:72:76:65:72:2d:41:64:64:72:65:73:73:3a:68:74:74:70:73:3a:2f:2f:7\
+    4:6d:63:2e:73:65:72:76:69:63:65:73:2e:61:6c:74:69:62:6f:78:2e:6e:65:74:3a:33:37:30:32:30:2f:61:63:73'"
+
+6. 
+Sett opp dhcp pool for lan
+/ip pool
+add name=routed ranges=192.168.10.50-192.168.10.200
+
+7. 
+Sett opp dhcp server på lan
+/ip dhcp-server
+add address-pool=routed disabled=no interface=bridge-lan lease-time=23h59m name=lan
+
+8. 
+Sett opp bridge for alle lan portene
+/interface bridge port
+add bridge=bridge-lan interface=ether1
+add bridge=bridge-lan interface=ether2
+add bridge=bridge-lan interface=ether3
+add bridge=bridge-lan interface=ether4
+add bridge=bridge-lan interface=ether5
+add bridge=bridge-lan interface=ether6
+add bridge=bridge-lan interface=ether7
+add bridge=bridge-lan interface=ether8
+add bridge=bridge-lan interface=ether9
+
+
+9.
+Ipadresse på LAN
+/ip address
+add address=192.168.10.1/24 interface=bridge-lan network=192.168.10.0
+
+10.
+dhcp klient på vlan 100-102
+/ip dhcp-client
+add add-default-route=special-classless default-route-distance=100 dhcp-options=vendor-class-identifier disabled=no interface=\
+    vlan-voip use-peer-dns=no use-peer-ntp=no
+add add-default-route=special-classless default-route-distance=100 dhcp-options=vendor-class-identifier disabled=no interface=vlan-tv \
+    use-peer-dns=no use-peer-ntp=no
+add dhcp-options=vendor-class-identifier disabled=no interface=vlan-isp use-peer-dns=no use-peer-ntp=no
+add dhcp-options=hostname,clientid interface=sfp-sfpplus1
+
+11.
+dhcp server config
+/ip dhcp-server network
+add address=192.168.10.0/24 dhcp-option=q22 dns-server=109.247.114.4 gateway=192.168.10.1 netmask=24
+
+12.
+tillate igmp på vlan-tv
+/ip firewall filter
+add action=accept chain=input in-interface=vlan-tv protocol=igmp
+add action=accept chain=input comment="accept established,related,untracked" connection-state=established,related,untracked
+add action=accept chain=input comment="accept ICMP" protocol=icmp
+add action=drop chain=input in-interface=vlan-isp
+
+13.
+aktivere src nat
+/ip firewall nat
+add action=masquerade chain=srcnat out-interface=vlan-isp
+add action=masquerade chain=srcnat out-interface=vlan-tv
+add action=masquerade chain=srcnat out-interface=vlan-voip
+
+14.
+Aktivere igmp proxy
+/routing igmp-proxy
+set quick-leave=yes
+/routing igmp-proxy interface
+add alternative-subnets=0.0.0.0/0 interface=vlan-tv upstream=yes
+add interface=bridge-lan
+

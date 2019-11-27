@@ -103,3 +103,54 @@ set quick-leave=yes
 add alternative-subnets=0.0.0.0/0 interface=vlan-tv upstream=yes
 add interface=bridge-lan
 
+
+15. 
+Native IPV6
+be om et PD prefix, altibox deler ut /56
+
+/ipv6 dhcp-client
+add add-default-route=yes interface=vlan-isp pool-name=ipv6-pd prefix-hint=::/56 request=address,prefix
+
+Legg på ipv6 adresse fra ipv6 pool på lan
+
+/ipv6 address
+add from-pool=ipv6-pd interface=bridge-lan advertise=yes
+
+Legge på ipv6 brannmur
+
+/ipv6 firewall address-list add address=::/128 comment="defconf: unspecified address" list=bad_ipv6
+/ipv6 firewall address-list add address=::1/128 comment="defconf: lo" list=bad_ipv6
+/ipv6 firewall address-list add address=fec0::/10 comment="defconf: site-local" list=bad_ipv6
+/ipv6 firewall address-list add address=::ffff:0.0.0.0/96 comment="defconf: ipv4-mapped" list=bad_ipv6
+/ipv6 firewall address-list add address=::/96 comment="defconf: ipv4 compat" list=bad_ipv6
+/ipv6 firewall address-list add address=100::/64 comment="defconf: discard only " list=bad_ipv6
+/ipv6 firewall address-list add address=2001:db8::/32 comment="defconf: documentation" list=bad_ipv6
+/ipv6 firewall address-list add address=2001:10::/28 comment="defconf: ORCHID" list=bad_ipv6
+/ipv6 firewall address-list add address=3ffe::/16 comment="defconf: 6bone" list=bad_ipv6
+/ipv6 firewall address-list add address=::224.0.0.0/100 comment="defconf: other" list=bad_ipv6
+/ipv6 firewall address-list add address=::127.0.0.0/104 comment="defconf: other" list=bad_ipv6
+/ipv6 firewall address-list add address=::/104 comment="defconf: other" list=bad_ipv6
+/ipv6 firewall address-list add address=::255.0.0.0/104 comment="defconf: other" list=bad_ipv6
+
+/ipv6 firewall filter add action=accept chain=input comment="defconf: accept established,related,untracked" connection-state=established,related,untracked
+/ipv6 firewall filter add action=drop chain=input comment="defconf: drop invalid" connection-state=invalid
+/ipv6 firewall filter add action=accept chain=input comment="defconf: accept ICMPv6" protocol=icmpv6
+/ipv6 firewall filter add action=accept chain=input comment="defconf: accept UDP traceroute" port=33434-33534 protocol=udp
+/ipv6 firewall filter add action=accept chain=input comment="defconf: accept DHCPv6-Client prefix delegation." dst-port=546 protocol=udp src-address=fe80::/16
+/ipv6 firewall filter add action=accept chain=input comment="defconf: accept IKE" dst-port=500,4500 protocol=udp
+/ipv6 firewall filter add action=accept chain=input comment="defconf: accept ipsec AH" protocol=ipsec-ah
+/ipv6 firewall filter add action=accept chain=input comment="defconf: accept ipsec ESP" protocol=ipsec-esp
+/ipv6 firewall filter add action=accept chain=input comment="defconf: accept all that matches ipsec policy" ipsec-policy=in,ipsec
+/ipv6 firewall filter add action=drop chain=input comment="defconf: drop everything else not coming from LAN" in-interface-list=!LAN
+/ipv6 firewall filter add action=accept chain=forward comment="defconf: accept established,related,untracked" connection-state=established,related,untracked
+/ipv6 firewall filter add action=drop chain=forward comment="defconf: drop invalid" connection-state=invalid
+/ipv6 firewall filter add action=drop chain=forward comment="defconf: drop packets with bad src ipv6" src-address-list=bad_ipv6
+/ipv6 firewall filter add action=drop chain=forward comment="defconf: drop packets with bad dst ipv6" dst-address-list=bad_ipv6
+/ipv6 firewall filter add action=drop chain=forward comment="defconf: rfc4890 drop hop-limit=1" hop-limit=equal:1 protocol=icmpv6
+/ipv6 firewall filter add action=accept chain=forward comment="defconf: accept ICMPv6" protocol=icmpv6
+/ipv6 firewall filter add action=accept chain=forward comment="defconf: accept HIP" protocol=139
+/ipv6 firewall filter add action=accept chain=forward comment="defconf: accept IKE" dst-port=500,4500 protocol=udp
+/ipv6 firewall filter add action=accept chain=forward comment="defconf: accept ipsec AH" protocol=ipsec-ah
+/ipv6 firewall filter add action=accept chain=forward comment="defconf: accept ipsec ESP" protocol=ipsec-esp
+/ipv6 firewall filter add action=accept chain=forward comment="defconf: accept all that matches ipsec policy" ipsec-policy=in,ipsec
+/ipv6 firewall filter add action=drop chain=forward comment="defconf: drop everything else not coming from LAN" in-interface-list=!LAN

@@ -16,6 +16,7 @@ set interfaces ethernet eth0 vif 101 dhcp-options name-server no-update
 set interfaces ethernet eth0 vif 101 firewall in name TV-IN
 
 set interfaces ethernet eth0 vif 102 address dhcp
+set interfaces ethernet eth0 vif 102 dhcp-options default-route update
 set interfaces ethernet eth0 vif 102 description Internet
 set interfaces ethernet eth0 vif 102 firewall in name WAN_IN
 set interfaces ethernet eth0 vif 102 firewall local name WAN_LOCAL

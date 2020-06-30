@@ -33,18 +33,19 @@ add code=60 name=vendor-class-identifier value=0x564d47383832352d42353042
 5. 
 Sett opp dhcp option 43 for lokal dhcp server slik at q22 vet om server
 /ip dhcp-server option
-add code=43 name=q22 value="'41:6c:74:69:62:6f:78:2d:54:4d:53:2d:53:65:72:76:65:72:2d:41:64:64:72:65:73:73:3a:68:74:74:70:73:3a:2f:2f:7\
-    4:6d:63:2e:73:65:72:76:69:63:65:73:2e:61:6c:74:69:62:6f:78:2e:6e:65:74:3a:33:37:30:32:30:2f:61:63:73'"
+add code=43 name=q22 value="'Altibox-TMS-Server-Address:https://tmc.services.altibox.net:37020/acs'"
 
 6. 
 Sett opp dhcp pool for lan
 /ip pool
-add name=routed ranges=192.168.10.50-192.168.10.200
+add name=dhcp ranges=10.11.12.50-10.11.12.200
 
 7. 
 Sett opp dhcp server på lan
-/ip dhcp-server
-add address-pool=routed disabled=no interface=bridge-lan lease-time=23h59m name=lan
+/ip dhcp-server network
+add address=10.11.12.0/24 dhcp-option=q22 dns-server=10.11.12.1 \
+    gateway=10.11.12.1 netmask=24 ntp-server=\
+    92.220.229.76,109.247.114.45,45.14.53.68,92.220.229.77
 
 8. 
 Sett opp bridge for alle lan portene
@@ -63,7 +64,7 @@ add bridge=bridge-lan interface=ether9
 9.
 Ipadresse på LAN
 /ip address
-add address=192.168.10.1/24 interface=bridge-lan network=192.168.10.0
+add address=10.11.12.1/24 interface=bridge-lan network=10.11.12.0
 
 10.
 dhcp klient på vlan 100-102
@@ -74,11 +75,6 @@ add add-default-route=special-classless default-route-distance=100 dhcp-options=
     use-peer-dns=no use-peer-ntp=no
 add dhcp-options=vendor-class-identifier disabled=no interface=vlan-isp use-peer-dns=no use-peer-ntp=no
 add dhcp-options=hostname,clientid interface=sfp-sfpplus1
-
-11.
-dhcp server config
-/ip dhcp-server network
-add address=192.168.10.0/24 dhcp-option=q22 dns-server=109.247.114.4 gateway=192.168.10.1 netmask=24
 
 12.
 tillate igmp på vlan-tv

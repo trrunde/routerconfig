@@ -11,142 +11,178 @@ http://192.168.88.1/webfig/#System:Packages
 
 Logg på med ssh for resterende
 
-2.
-Kopier vmg sin mac adresse, en får ikke ip-adresse på vlan 101 uten korrekt mac. Legg mac adresse på sfp interface
+
+/interface bridge
+add admin-mac=74:4D:28:27:8E:D0 auto-mac=no comment=defconf igmp-snooping=yes name=\
+    bridge-lan
 
 /interface ethernet
-set [ find default-name=sfp-sfpplus1 ] mac-address=54:83:XX:XX:XX:XX
-
-3. 
-Sett opp vlan 100-102 på wan
+set [ find default-name=ether10 ] name=routed-port
+set [ find default-name=sfp-sfpplus1 ] l2mtu=1592 mac-address=54:83:XX:XX
 
 /interface vlan
 add interface=sfp-sfpplus1 name=vlan-isp vlan-id=102
 add interface=sfp-sfpplus1 name=vlan-tv vlan-id=101
 add interface=sfp-sfpplus1 name=vlan-voip vlan-id=100
+/interface list
+add comment=defconf name=WAN
+add comment=defconf name=LAN
 
-4. 
-Sett dhcp option 60 slik at dhcp server tror du er en VMG og dermed gir deg routing for tv subnetta via dhcp
 /ip dhcp-client option
 add code=60 name=vendor-class-identifier value=0x564d47383832352d42353042
-
-5. 
-Sett opp dhcp option 43 for lokal dhcp server slik at q22 vet om server
 /ip dhcp-server option
-add code=43 name=q22 value="'Altibox-TMS-Server-Address:https://tmc.services.altibox.net:37020/acs'"
+add code=43 name=q22 value=\
+    "'Altibox-TMS-Server-Address:https://tmc.services.altibox.net:37020/acs'"
 
-6. 
-Sett opp dhcp pool for lan
 /ip pool
 add name=dhcp ranges=10.11.12.50-10.11.12.200
 
-7. 
-Sett opp dhcp server på lan
+/ip dhcp-server
+add address-pool=dhcp disabled=no interface=bridge-lan lease-time=23h59m name=\
+    lan
+
+/interface bridge port
+add bridge=bridge-lan comment=defconf interface=ether2
+add bridge=bridge-lan comment=defconf interface=ether3
+add bridge=bridge-lan comment=defconf interface=ether4
+add bridge=bridge-lan comment=defconf interface=ether5
+add bridge=bridge-lan comment=defconf interface=ether6
+add bridge=bridge-lan comment=defconf interface=ether7
+add bridge=bridge-lan comment=defconf interface=ether8
+add bridge=bridge-lan comment=defconf interface=ether9
+add bridge=bridge-lan interface=ether1
+
+/ipv6 settings
+set accept-router-advertisements=yes
+
+/interface list member
+add comment=defconf interface=bridge-lan list=LAN
+add comment=defconf interface=vlan-isp list=WAN
+/ip address
+add address=10.11.12.1/24 comment=defconf interface=ether1 network=10.11.12.0
+
+/ip dhcp-client
+add add-default-route=special-classless default-route-distance=100 dhcp-options=\
+    vendor-class-identifier disabled=no interface=vlan-voip use-peer-dns=no \
+    use-peer-ntp=no
+add add-default-route=special-classless default-route-distance=100 dhcp-options=\
+    vendor-class-identifier disabled=no interface=vlan-tv use-peer-dns=no \
+    use-peer-ntp=no
+add dhcp-options=vendor-class-identifier disabled=no interface=vlan-isp
+
 /ip dhcp-server network
-add address=10.11.12.0/24 dhcp-option=q22 dns-server=10.11.12.1 \
+add address=10.11.12.0/24 comment=defconf dhcp-option=q22 dns-server=10.11.12.1 \
     gateway=10.11.12.1 netmask=24 ntp-server=\
     92.220.229.76,109.247.114.45,45.14.53.68,92.220.229.77
 
-8. 
-Sett opp bridge for alle lan portene
-/interface bridge port
-add bridge=bridge-lan interface=ether1
-add bridge=bridge-lan interface=ether2
-add bridge=bridge-lan interface=ether3
-add bridge=bridge-lan interface=ether4
-add bridge=bridge-lan interface=ether5
-add bridge=bridge-lan interface=ether6
-add bridge=bridge-lan interface=ether7
-add bridge=bridge-lan interface=ether8
-add bridge=bridge-lan interface=ether9
+/ip dhcp-server vendor-class-id
+add address-pool=dhcp name=q22 server=torvmyra vid=Q22
+/ip dns
+set allow-remote-requests=yes
 
+/ip firewall address-list
+add address=10.11.12.2-10.11.12.254 list=allowed_to_router
 
-9.
-Ipadresse på LAN
-/ip address
-add address=10.11.12.1/24 interface=bridge-lan network=10.11.12.0
-
-10.
-dhcp klient på vlan 100-102
-/ip dhcp-client
-add add-default-route=special-classless default-route-distance=100 dhcp-options=vendor-class-identifier disabled=no interface=\
-    vlan-voip use-peer-dns=no use-peer-ntp=no
-add add-default-route=special-classless default-route-distance=100 dhcp-options=vendor-class-identifier disabled=no interface=vlan-tv \
-    use-peer-dns=no use-peer-ntp=no
-add dhcp-options=vendor-class-identifier disabled=no interface=vlan-isp use-peer-dns=no use-peer-ntp=no
-add dhcp-options=hostname,clientid interface=sfp-sfpplus1
-
-12.
-tillate igmp på vlan-tv
 /ip firewall filter
+add action=accept chain=input comment=\
+    "defconf: accept established,related,untracked" connection-state=\
+    established,related,untracked
 add action=accept chain=input in-interface=vlan-tv protocol=igmp
-add action=accept chain=input comment="accept established,related,untracked" connection-state=established,related,untracked
-add action=accept chain=input comment="accept ICMP" protocol=icmp
-add action=drop chain=input in-interface=vlan-isp
+add action=accept chain=input comment="defconf: accept ICMP" protocol=icmp
+add action=drop chain=input comment="defconf: drop invalid" connection-state=invalid
+add action=fasttrack-connection chain=forward comment="defconf: fasttrack" \
+    connection-state=established,related
+add action=accept chain=forward connection-state=established,related
+add action=accept chain=input src-address-list=allowed_to_router
+add action=accept chain=input comment="WAN to router" connection-state=\
+    established,related in-interface-list=WAN
+add action=accept chain=input in-interface-list=WAN src-address-list=\
+    allowed_to_router
+add action=drop chain=input in-interface-list=WAN
 
-13.
-aktivere src nat
 /ip firewall nat
-add action=masquerade chain=srcnat out-interface=vlan-isp
+add action=masquerade chain=srcnat comment="defconf: masquerade" ipsec-policy=\
+    out,none out-interface=vlan-isp
 add action=masquerade chain=srcnat out-interface=vlan-tv
 add action=masquerade chain=srcnat out-interface=vlan-voip
 
-14.
-Aktivere igmp proxy
+/ipv6 address
+add address=::1 from-pool=ipv6-pd interface=bridge-lan
+
+/ipv6 dhcp-client
+add add-default-route=yes comment="Altibox pd" interface=vlan-isp pool-name=ipv6-pd \
+    prefix-hint=::/56 request=address,prefix
+
+/ipv6 firewall address-list
+add address=::/128 comment="defconf: unspecified address" list=bad_ipv6
+add address=::1/128 comment="defconf: lo" list=bad_ipv6
+add address=fec0::/10 comment="defconf: site-local" list=bad_ipv6
+add address=::ffff:0.0.0.0/96 comment="defconf: ipv4-mapped" list=bad_ipv6
+add address=::/96 comment="defconf: ipv4 compat" list=bad_ipv6
+add address=100::/64 comment="defconf: discard only " list=bad_ipv6
+add address=2001:db8::/32 comment="defconf: documentation" list=bad_ipv6
+add address=2001:10::/28 comment="defconf: ORCHID" list=bad_ipv6
+add address=3ffe::/16 comment="defconf: 6bone" list=bad_ipv6
+add address=::224.0.0.0/100 comment="defconf: other" list=bad_ipv6
+add address=::127.0.0.0/104 comment="defconf: other" list=bad_ipv6
+add address=::/104 comment="defconf: other" list=bad_ipv6
+add address=::255.0.0.0/104 comment="defconf: other" list=bad_ipv6
+
+/ipv6 firewall filter
+add action=accept chain=input comment=\
+    "defconf: accept established,related,untracked" connection-state=\
+    established,related,untracked
+add action=accept chain=input comment="defconf: accept ipsec AH" protocol=ipsec-ah
+add action=drop chain=input comment="defconf: drop invalid" connection-state=invalid
+add action=accept chain=input comment="defconf: accept ICMPv6" protocol=icmpv6
+add action=accept chain=input comment="defconf: accept UDP traceroute" port=\
+    33434-33534 protocol=udp
+add action=accept chain=input comment=\
+    "defconf: accept DHCPv6-Client prefix delegation." dst-port=546 protocol=udp \
+    src-address=fe80::/10
+add action=accept chain=input comment="defconf: accept IKE" dst-port=500,4500 \
+    protocol=udp
+add action=accept chain=input comment="defconf: accept ipsec ESP" protocol=ipsec-esp
+add action=accept chain=input comment=\
+    "defconf: accept all that matches ipsec policy" ipsec-policy=in,ipsec
+add action=drop chain=input comment=\
+    "defconf: drop everything else not coming from LAN" in-interface-list=!LAN
+add action=accept chain=forward comment=\
+    "defconf: accept established,related,untracked" connection-state=\
+    established,related,untracked
+add action=drop chain=forward comment="defconf: drop invalid" connection-state=\
+    invalid
+add action=drop chain=forward comment="defconf: drop packets with bad src ipv6" \
+    src-address-list=bad_ipv6
+add action=drop chain=forward comment="defconf: drop packets with bad dst ipv6" \
+    dst-address-list=bad_ipv6
+add action=drop chain=forward comment="defconf: rfc4890 drop hop-limit=1" hop-limit=\
+    equal:1 protocol=icmpv6
+add action=accept chain=forward comment="defconf: accept ICMPv6" protocol=icmpv6
+add action=accept chain=forward comment="defconf: accept HIP" protocol=139
+add action=accept chain=forward comment="defconf: accept IKE" dst-port=500,4500 \
+    protocol=udp
+add action=accept chain=forward comment="defconf: accept ipsec AH" protocol=ipsec-ah
+add action=accept chain=forward comment="defconf: accept ipsec ESP" protocol=\
+    ipsec-esp
+add action=accept chain=forward comment=\
+    "defconf: accept all that matches ipsec policy" ipsec-policy=in,ipsec
+add action=drop chain=forward comment=\
+    "defconf: drop everything else not coming from LAN" in-interface-list=!LAN
+
 /routing igmp-proxy
 set quick-leave=yes
 /routing igmp-proxy interface
 add alternative-subnets=0.0.0.0/0 interface=vlan-tv upstream=yes
 add interface=bridge-lan
 
+/system clock
+set time-zone-name=Europe/Oslo
 
-15. 
-Native IPV6
-be om et PD prefix, altibox deler ut /56
+/system ntp client
+set enabled=yes primary-ntp=92.220.229.76 secondary-ntp=2a01:798:0:8013::123 \
+    server-dns-names=ntp.altibox.no
 
-/ipv6 dhcp-client
-add add-default-route=yes interface=vlan-isp pool-name=ipv6-pd prefix-hint=::/56 request=address,prefix
 
-Legg på ipv6 adresse fra ipv6 pool på lan
 
-/ipv6 address
-add from-pool=ipv6-pd interface=bridge-lan advertise=yes
 
-Legge på ipv6 brannmur
-
-/ipv6 firewall address-list add address=::/128 comment="defconf: unspecified address" list=bad_ipv6
-/ipv6 firewall address-list add address=::1/128 comment="defconf: lo" list=bad_ipv6
-/ipv6 firewall address-list add address=fec0::/10 comment="defconf: site-local" list=bad_ipv6
-/ipv6 firewall address-list add address=::ffff:0.0.0.0/96 comment="defconf: ipv4-mapped" list=bad_ipv6
-/ipv6 firewall address-list add address=::/96 comment="defconf: ipv4 compat" list=bad_ipv6
-/ipv6 firewall address-list add address=100::/64 comment="defconf: discard only " list=bad_ipv6
-/ipv6 firewall address-list add address=2001:db8::/32 comment="defconf: documentation" list=bad_ipv6
-/ipv6 firewall address-list add address=2001:10::/28 comment="defconf: ORCHID" list=bad_ipv6
-/ipv6 firewall address-list add address=3ffe::/16 comment="defconf: 6bone" list=bad_ipv6
-/ipv6 firewall address-list add address=::224.0.0.0/100 comment="defconf: other" list=bad_ipv6
-/ipv6 firewall address-list add address=::127.0.0.0/104 comment="defconf: other" list=bad_ipv6
-/ipv6 firewall address-list add address=::/104 comment="defconf: other" list=bad_ipv6
-/ipv6 firewall address-list add address=::255.0.0.0/104 comment="defconf: other" list=bad_ipv6
-
-/ipv6 firewall filter add action=accept chain=input comment="defconf: accept established,related,untracked" connection-state=established,related,untracked
-/ipv6 firewall filter add action=drop chain=input comment="defconf: drop invalid" connection-state=invalid
-/ipv6 firewall filter add action=accept chain=input comment="defconf: accept ICMPv6" protocol=icmpv6
-/ipv6 firewall filter add action=accept chain=input comment="defconf: accept UDP traceroute" port=33434-33534 protocol=udp
-/ipv6 firewall filter add action=accept chain=input comment="defconf: accept DHCPv6-Client prefix delegation." dst-port=546 protocol=udp src-address=fe80::/16
-/ipv6 firewall filter add action=accept chain=input comment="defconf: accept IKE" dst-port=500,4500 protocol=udp
-/ipv6 firewall filter add action=accept chain=input comment="defconf: accept ipsec AH" protocol=ipsec-ah
-/ipv6 firewall filter add action=accept chain=input comment="defconf: accept ipsec ESP" protocol=ipsec-esp
-/ipv6 firewall filter add action=accept chain=input comment="defconf: accept all that matches ipsec policy" ipsec-policy=in,ipsec
-/ipv6 firewall filter add action=drop chain=input comment="defconf: drop everything else not coming from LAN" in-interface-list=!LAN
-/ipv6 firewall filter add action=accept chain=forward comment="defconf: accept established,related,untracked" connection-state=established,related,untracked
-/ipv6 firewall filter add action=drop chain=forward comment="defconf: drop invalid" connection-state=invalid
-/ipv6 firewall filter add action=drop chain=forward comment="defconf: drop packets with bad src ipv6" src-address-list=bad_ipv6
-/ipv6 firewall filter add action=drop chain=forward comment="defconf: drop packets with bad dst ipv6" dst-address-list=bad_ipv6
-/ipv6 firewall filter add action=drop chain=forward comment="defconf: rfc4890 drop hop-limit=1" hop-limit=equal:1 protocol=icmpv6
-/ipv6 firewall filter add action=accept chain=forward comment="defconf: accept ICMPv6" protocol=icmpv6
-/ipv6 firewall filter add action=accept chain=forward comment="defconf: accept HIP" protocol=139
-/ipv6 firewall filter add action=accept chain=forward comment="defconf: accept IKE" dst-port=500,4500 protocol=udp
-/ipv6 firewall filter add action=accept chain=forward comment="defconf: accept ipsec AH" protocol=ipsec-ah
-/ipv6 firewall filter add action=accept chain=forward comment="defconf: accept ipsec ESP" protocol=ipsec-esp
-/ipv6 firewall filter add action=accept chain=forward comment="defconf: accept all that matches ipsec policy" ipsec-policy=in,ipsec
-/ipv6 firewall filter add action=drop chain=forward comment="defconf: drop everything else not coming from LAN" in-interface-list=!LAN

@@ -163,7 +163,11 @@ set service nat rule 5011 type masquerade
 set service ssh port 22
 set service ssh protocol-version v2
 
-set system ntp server ntp.altibox.no
+set system ntp server 0.ntp.altibox.no
+set system ntp server 1.ntp.altibox.no
+set system ntp server 2.ntp.altibox.no
+set system ntp server 3.ntp.altibox.no
+
 set system offload hwnat enable
 set system offload ipsec enable
 set system syslog global facility all level notice

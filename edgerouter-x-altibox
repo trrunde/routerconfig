@@ -1,28 +1,129 @@
 Følgende ting trengs for å få tv og internet fra Altibox på en edgerouter-x
 
-1. Kopier mac adresse fra hjemmesentral og bruk denne på erx
 
-set interfaces ethernet eth0 mac 'ff:ff:ff:ff:ff:ff'
+ Legg in exit hook for dhcp klienten slik at routeren tar i bruk router via dhcp opsjon
 
-2. Definer vlan på uplink, lat som en er en VMG slik at opsjon med statiske router blir sendt. (edgerouter endrer ikke routetabellen basert på inneholdet, så det må gjøres statisk)
+sudo su
+
+curl https://gist.github.com/kgersen/58c26951f087e89cef28/raw/bbb20531f108bc7e03897a10a6d0dad4dc2c26d1/rfc3442-classless-routes -o /etc/dhcp3/dhclient-exit-hooks.d/rfc3442-classless-routes && chmod 755 /etc/dhcp3/dhclient-exit-hooks.d/rfc3442-classless-routes
+
+exit
+
+
+set firewall all-ping enable
+set firewall broadcast-ping disable
+
+set firewall ipv6-name WANv6_IN default-action drop
+set firewall ipv6-name WANv6_IN description 'WAN inbound traffic forwarded to LAN'
+set firewall ipv6-name WANv6_IN rule 10 action accept
+set firewall ipv6-name WANv6_IN rule 10 description 'Allow established/related sessions'
+set firewall ipv6-name WANv6_IN rule 10 state established enable
+set firewall ipv6-name WANv6_IN rule 10 state related enable
+set firewall ipv6-name WANv6_IN rule 20 action drop
+set firewall ipv6-name WANv6_IN rule 20 description 'Drop invalid state'
+set firewall ipv6-name WANv6_IN rule 20 state invalid enable
+
+set firewall ipv6-name WANv6_LOCAL default-action drop
+set firewall ipv6-name WANv6_LOCAL description 'WAN inbound traffic to the router'
+set firewall ipv6-name WANv6_LOCAL enable-default-log
+set firewall ipv6-name WANv6_LOCAL rule 10 action accept
+set firewall ipv6-name WANv6_LOCAL rule 10 description 'Allow established/related sessions'
+set firewall ipv6-name WANv6_LOCAL rule 10 state established enable
+set firewall ipv6-name WANv6_LOCAL rule 10 state related enable
+set firewall ipv6-name WANv6_LOCAL rule 20 action drop
+set firewall ipv6-name WANv6_LOCAL rule 20 description 'Drop invalid state'
+set firewall ipv6-name WANv6_LOCAL rule 20 state invalid enable
+set firewall ipv6-name WANv6_LOCAL rule 30 action accept
+set firewall ipv6-name WANv6_LOCAL rule 30 description 'Allow IPv6 icmp'
+set firewall ipv6-name WANv6_LOCAL rule 30 protocol ipv6-icmp
+set firewall ipv6-name WANv6_LOCAL rule 40 action accept
+set firewall ipv6-name WANv6_LOCAL rule 40 description 'allow dhcpv6'
+set firewall ipv6-name WANv6_LOCAL rule 40 destination port 546
+set firewall ipv6-name WANv6_LOCAL rule 40 protocol udp
+set firewall ipv6-name WANv6_LOCAL rule 40 source port 547
+
+set firewall ipv6-receive-redirects disable
+set firewall ipv6-src-route disable
+set firewall ip-src-route disable
+set firewall log-martians enable
+
+set firewall name WAN_IN default-action drop
+set firewall name WAN_IN description 'WAN to internal'
+set firewall name WAN_IN rule 10 action accept
+set firewall name WAN_IN rule 10 description 'Allow established/related'
+set firewall name WAN_IN rule 10 state established enable
+set firewall name WAN_IN rule 10 state related enable
+set firewall name WAN_IN rule 20 action drop
+set firewall name WAN_IN rule 20 description 'Drop invalid state'
+set firewall name WAN_IN rule 20 state invalid enable
+
+set firewall name WAN_LOCAL default-action drop
+set firewall name WAN_LOCAL description 'WAN to router'
+set firewall name WAN_LOCAL rule 10 action accept
+set firewall name WAN_LOCAL rule 10 description 'Allow established/related'
+set firewall name WAN_LOCAL rule 10 state established enable
+set firewall name WAN_LOCAL rule 10 state related enable
+set firewall name WAN_LOCAL rule 20 action drop
+set firewall name WAN_LOCAL rule 20 description 'Drop invalid state'
+set firewall name WAN_LOCAL rule 20 state invalid enable
+
+set firewall receive-redirects disable
+set firewall send-redirects enable
+set firewall source-validation disable
+set firewall syn-cookies enable
+
+set interfaces ethernet eth0 description Uplink
+set interfaces ethernet eth0 duplex auto
+set interfaces ethernet eth0 mac 'XX:XX:XX:XX:XX:XX'
+set interfaces ethernet eth0 speed auto
 
 set interfaces ethernet eth0 vif 101 address dhcp
 set interfaces ethernet eth0 vif 101 description IPTV
-set interfaces ethernet eth0 vif 101 dhcp-options client-option 'send vendor-class-identifier &quot;VMG8825-B50B&quot;;'
 set interfaces ethernet eth0 vif 101 dhcp-options client-option 'request subnet-mask, routers, rfc3442-classless-static-routes;'
+set interfaces ethernet eth0 vif 101 dhcp-options client-option 'send vendor-class-identifier &quot;VMG8825-B50B&quot;;'
 set interfaces ethernet eth0 vif 101 dhcp-options default-route no-update
-set interfaces ethernet eth0 vif 101 dhcp-options default-route-distance 210
 set interfaces ethernet eth0 vif 101 dhcp-options name-server no-update
 
-
 set interfaces ethernet eth0 vif 102 address dhcp
-set interfaces ethernet eth0 vif 102 dhcp-options default-route update
 set interfaces ethernet eth0 vif 102 description Internet
+set interfaces ethernet eth0 vif 102 dhcp-options default-route update
+set interfaces ethernet eth0 vif 102 dhcp-options name-server update
+set interfaces ethernet eth0 vif 102 dhcpv6-pd pd 1 interface switch0 host-address '::1'
+set interfaces ethernet eth0 vif 102 dhcpv6-pd pd 1 interface switch0 prefix-id ':1'
+set interfaces ethernet eth0 vif 102 dhcpv6-pd pd 1 interface switch0 service slaac
+set interfaces ethernet eth0 vif 102 dhcpv6-pd pd 1 prefix-length 56
+set interfaces ethernet eth0 vif 102 dhcpv6-pd rapid-commit enable
+set interfaces ethernet eth0 vif 102 firewall in ipv6-name WANv6_IN
 set interfaces ethernet eth0 vif 102 firewall in name WAN_IN
+set interfaces ethernet eth0 vif 102 firewall local ipv6-name WANv6_LOCAL
 set interfaces ethernet eth0 vif 102 firewall local name WAN_LOCAL
 
+set interfaces ethernet eth1 description Local
+set interfaces ethernet eth1 duplex auto
+set interfaces ethernet eth1 speed auto
+set interfaces ethernet eth2 description Local
+set interfaces ethernet eth2 duplex auto
+set interfaces ethernet eth2 speed auto
+set interfaces ethernet eth3 description Local
+set interfaces ethernet eth3 duplex auto
+set interfaces ethernet eth3 speed auto
+set interfaces ethernet eth4 description Local
+set interfaces ethernet eth4 duplex auto
+set interfaces ethernet eth4 speed auto
+set interfaces loopback lo
+set interfaces switch switch0 address 192.168.1.1/24
+set interfaces switch switch0 description Local
+set interfaces switch switch0 mtu 1500
+set interfaces switch switch0 switch-port interface eth1
+set interfaces switch switch0 switch-port interface eth2
+set interfaces switch switch0 switch-port interface eth3
+set interfaces switch switch0 switch-port interface eth4
+set interfaces switch switch0 switch-port vlan-aware disable
 
-3. Aktiv igmp proxy
+set port-forward auto-firewall enable
+set port-forward hairpin-nat enable
+set port-forward lan-interface switch0
+set port-forward wan-interface eth0.102
 
 set protocols igmp-proxy interface eth0.101 alt-subnet 0.0.0.0/0
 set protocols igmp-proxy interface eth0.101 role upstream
@@ -30,23 +131,43 @@ set protocols igmp-proxy interface eth0.101 threshold 1
 set protocols igmp-proxy interface switch0 role downstream
 set protocols igmp-proxy interface switch0 threshold 1
 
-4. Legg inn statiske router via vlan 101:
+set service dhcp-server disabled false
+set service dhcp-server global-parameters 'option option-43 code 43 = string;'
+set service dhcp-server hostfile-update disable
+set service dhcp-server shared-network-name LAN authoritative enable
+set service dhcp-server shared-network-name LAN subnet 192.168.1.0/24 default-router 192.168.1.1
+set service dhcp-server shared-network-name LAN subnet 192.168.1.0/24 dns-server 192.168.1.1
+set service dhcp-server shared-network-name LAN subnet 192.168.1.0/24 lease 86400
+set service dhcp-server shared-network-name LAN subnet 192.168.1.0/24 start 192.168.1.38 stop 192.168.1.243
+set service dhcp-server shared-network-name LAN subnet 192.168.1.0/24 subnet-parameters 'option option-43 &quot;Altibox-TMS-Server-Address:https://tmc.services.altibox.net:37020/acs&quot;;'
 
-set protocols static route x.x.x.x/x next-hop 10.x.x.x
-
-
-5. Aktiver nating av trafikk mot vlan 101 og 102
+set service dhcp-server static-arp disable
+set service dhcp-server use-dnsmasq disable
+set service dns forwarding cache-size 150
+set service dns forwarding listen-on switch0
+set service gui http-port 80
+set service gui https-port 443
+set service gui older-ciphers disable
+set service lldp interface switch0
 
 set service nat rule 5010 description 'Internet - Vlan102'
 set service nat rule 5010 log disable
 set service nat rule 5010 outbound-interface eth0.102
 set service nat rule 5010 protocol all
 set service nat rule 5010 type masquerade
-
 set service nat rule 5011 description 'TV - Vlan 101'
 set service nat rule 5011 log disable
 set service nat rule 5011 outbound-interface eth0.101
 set service nat rule 5011 protocol all
 set service nat rule 5011 type masquerade
+set service ssh port 22
+set service ssh protocol-version v2
 
-
+set system ntp server ntp.altibox.no
+set system offload hwnat enable
+set system offload ipsec enable
+set system syslog global facility all level notice
+set system syslog global facility protocols level debug
+set system time-zone Europe/Oslo
+set system traffic-analysis dpi disable
+set system traffic-analysis export disable

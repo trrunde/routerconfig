@@ -82,6 +82,7 @@ set interfaces ethernet eth0 vif 101 description IPTV
 set interfaces ethernet eth0 vif 101 dhcp-options client-option 'request subnet-mask, routers, rfc3442-classless-static-routes;'
 set interfaces ethernet eth0 vif 101 dhcp-options client-option 'send vendor-class-identifier &quot;VMG8825-B50B&quot;;'
 set interfaces ethernet eth0 vif 101 dhcp-options default-route no-update
+set interfaces ethernet eth0 vif 101 dhcp-options default-route-distance 255
 set interfaces ethernet eth0 vif 101 dhcp-options name-server no-update
 
 set interfaces ethernet eth0 vif 102 address dhcp

@@ -1,0 +1,122 @@
+# Dette er en ganske skrellet Junos-config for å få opp en Juniper SRX mot Altibox native IPv6 (ikke 6rd) med Prefix Delegation via FMG i bridge mode.
+# Dette funker for undertegnede, om det ikke funker for deg så kan jeg ha kommet i skade for å ha utelatt en detalj. :-)
+# dhcpcd på en klient i vlan 666 besørger en adresse og rute ut, men terminerer deretter uventet. Ikke ferdig debugget.
+# 
+# Jeg har en aksessport mot FMG i VLAN 256, og bruker VLAN 666 i en annen securityzone som innsidebein. Tilpass etter behov.
+# Nix TV her altså.
+
+
+# Interfaces (merk totalt fravær av statisk IP-info)
+# =========
+set interfaces irb unit 256 description "Mot Altibox"
+set interfaces irb unit 256 family inet dhcp
+set interfaces irb unit 256 family inet unconditional-src-learn
+set interfaces irb unit 256 family inet6 dhcpv6-client client-type stateful
+set interfaces irb unit 256 family inet6 dhcpv6-client client-ia-type ia-pd
+set interfaces irb unit 256 family inet6 dhcpv6-client rapid-commit
+set interfaces irb unit 256 family inet6 dhcpv6-client client-identifier duid-type duid-llt
+set interfaces irb unit 256 family inet6 dhcpv6-client req-option dns-server
+set interfaces irb unit 256 family inet6 dhcpv6-client retransmission-attempt 0
+set interfaces irb unit 256 family inet6 dhcpv6-client update-router-advertisement interface irb.666 other-stateful-configuration
+set interfaces irb unit 256 family inet6 dhcpv6-client update-router-advertisement interface irb.666 max-advertisement-interval 6
+set interfaces irb unit 256 family inet6 dhcpv6-client update-router-advertisement interface irb.666 min-advertisement-interval 3
+#
+set interfaces irb unit 666 description "Test6 innside-interface"
+set interfaces irb unit 666 family inet6
+
+# System services (litt usikker på om dette gjør noe fra eller til uten å samtidig angi en statisk pool)
+# ===============
+set system services dhcp-local-server dhcpv6 overrides interface-client-limit 100
+set system services dhcp-local-server dhcpv6 overrides rapid-commit
+set system services dhcp-local-server dhcpv6 overrides always-add-option-dns-server
+set system services dhcp-local-server dhcpv6 group dhcpv6-group-1 interface irb.666
+set system services dhcp-local-server dhcpv6 allow-leasequery
+
+# Security zones
+# ==============
+set security zones security-zone untrust host-inbound-traffic system-services ping
+set security zones security-zone untrust host-inbound-traffic system-services dhcp
+set security zones security-zone untrust host-inbound-traffic system-services ntp
+set security zones security-zone untrust host-inbound-traffic system-services dhcpv6
+set security zones security-zone untrust host-inbound-traffic protocols router-discovery
+set security zones security-zone untrust interfaces irb.256
+set security zones security-zone test6 host-inbound-traffic system-services dhcpv6
+set security zones security-zone test6 host-inbound-traffic system-services ping
+set security zones security-zone test6 host-inbound-traffic protocols router-discovery
+set security zones security-zone test6 interfaces irb.666
+
+# Security policies (adapt as you see fit, allowed traffic from untrust to test6 is limited to icmp and ssh)
+# =================
+set security policies global policy permit-untrust match source-address any
+set security policies global policy permit-untrust match destination-address any
+set security policies global policy permit-untrust match application any
+set security policies global policy permit-untrust match from-zone untrust
+set security policies global policy permit-untrust match to-zone untrust
+set security policies global policy permit-untrust then permit
+set security policies global policy permit-test6 match source-address any
+set security policies global policy permit-test6 match destination-address any
+set security policies global policy permit-test6 match application junos-icmp-ping
+set security policies global policy permit-test6 match application junos-ssh
+set security policies global policy permit-test6 match from-zone untrust
+set security policies global policy permit-test6 match to-zone test6
+set security policies global policy permit-test6 then permit
+set security policies global policy block-untrust-in match source-address any
+set security policies global policy block-untrust-in match destination-address any
+set security policies global policy block-untrust-in match application any
+set security policies global policy block-untrust-in match from-zone untrust
+set security policies global policy block-untrust-in match to-zone any
+set security policies global policy block-untrust-in then deny
+set security policies global policy permit-all match source-address any
+set security policies global policy permit-all match destination-address any
+set security policies global policy permit-all match application any
+set security policies global policy permit-all match from-zone any
+set security policies global policy permit-all match to-zone any
+set security policies global policy permit-all then permit
+
+# Protocols (router-adv på irb.666 er dynamisk enablet)
+# =========
+set protocols router-advertisement interface irb.256
+set protocols neighbor-discovery
+
+# VLANs
+# =====
+set vlans altibox vlan-id 256
+set vlans altibox l3-interface irb.256
+set vlans test6 vlan-id 666
+set vlans test6 l3-interface irb.666
+
+# Deaktivert konfig, kan være relevant for oppsett med TV?
+# =====================================================
+# set vlans altibox forwarding-options dhcp-security dhcpv6-options option-16 use-string VMG8825-B50B
+# deactivate vlans altibox forwarding-options dhcp-security dhcpv6-options option-16
+
+----- End config ----------------
+
+Verifisering:
+user@JuniperSRX> show dhcpv6 client binding  
+
+IP/prefix                       Expires     State      ClientType    Interface       Client DUID
+2a01:799:fff:ff00::/56          27092       BOUND      STATEFUL      irb.256         LL_TIME0x3-0x608cea06-ec:13:db:ff:ff:33
+
+
+
+user@JuniperSRX> show interfaces terse | match "256|666|inet6" 
+                                   inet6   
+irb.256                 up    up   inet     92.666.666.666/20
+                                   inet6    fe80::ee13:dbff:ff:ff30/64
+irb.666                 up    up   inet6    2a01:799:fff:ff00::1/64
+
+
+Merk at utsideinterfacet kun vil ha en link local adresse med denne konfigen. Det funker helt fint.
+
+
+
+user@JuniperSRX> show route table inet6.0 
+
+inet6.0: 7 destinations, 7 routes (7 active, 0 holddown, 0 hidden)
++ = Active Route, - = Last Active, * = Both
+
+::/0               *[Access-internal/12] 3d 09:03:22
+                    >  to fe80::208:ff:fe01:1 via irb.256
+[......]
+div lokale ruter kommer her.

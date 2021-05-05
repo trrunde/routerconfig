@@ -5,6 +5,20 @@
 # Jeg har en aksessport mot FMG i VLAN 256, og bruker VLAN 666 i en annen securityzone som innsidebein. Tilpass etter behov.
 # Nix TV her altså.
 
+# Første steg er å enable IPv6:
+set security forwarding-options family inet6 mode flow-based
+
+# Når man committer foregående linje, så får man beskjed om å reboote for å aktivere endringen.
+# Verifisering:
+
+# user@JuniperSRX> show security flow status
+#  Flow forwarding mode:
+#    Inet forwarding mode: flow based
+#    Inet6 forwarding mode: flow based
+#    MPLS forwarding mode: drop
+#    ISO forwarding mode: drop
+
+# Konfig for Altibox
 
 # Interfaces (merk totalt fravær av statisk IP-info)
 # =========

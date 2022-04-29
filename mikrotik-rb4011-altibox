@@ -10,10 +10,10 @@ add admin-mac=74:4D:28:27:8E:D0 auto-mac=no comment=defconf igmp-snooping=yes na
 set [ find default-name=ether10 ] name=routed-port
 
 /interface vlan
-add interface=bridge-lan name=ipv6-only vlan-id=6
 add interface=sfp-sfpplus1 name=vlan-isp vlan-id=102
 add interface=sfp-sfpplus1 name=vlan-tv vlan-id=101
 add interface=sfp-sfpplus1 name=vlan-voip vlan-id=100
+
 /interface list
 add comment=defconf name=WAN
 add comment=defconf name=LAN
